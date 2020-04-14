@@ -1,2 +1,5 @@
 *.ini
 *.code-workspace
+/serial_image_loader_python
+topcopy.sv
+topcopy2.sv

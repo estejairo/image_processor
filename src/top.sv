@@ -1,165 +1,151 @@
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
+// Company: Universidad Tecnica Federico Santa Maria
+// Author: Jairo Gonzalez
 // 
-// Create Date: 30.08.2019 15:15:02
-// Design Name: 
-// Module Name: top_module
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
+// Create Date: 12.04.2020 12:00:00
+// Design Name: top
+// Module Name: top
+// Project Name: image_processor
+// Target Devices: Nexys 4 DDR - Artix 7 FPGA
 // Description: 
 // 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module top_module(
-//  input logic UART_TXD_IN,                    //datos seriales de python
-    input logic CLK100MHZ, CPU_RESETN,
-    input logic [11:0] SW,
-    output logic [3:0] VGA_R,VGA_G,VGA_B,         //salidas al display
-    output logic VGA_HS,VGA_VS
+module top(
+    input logic UART_TXD_IN,                    //UART data input
+    input logic CLK100MHZ,                      //System clock
+    input logic CPU_RESETN,                     //Hardware reset   
+    input logic [11:0] SW,                      //Switches
+    output logic [3:0] VGA_R,VGA_G,VGA_B,       //VGA Colors
+    output logic VGA_HS,VGA_VS                  //VGA sync signals
     
-    );
+);
 
-    logic rst_press;
-
-    logic CLK65MHZ;
+    logic rst_press;                        //debounced reset signal
+    
+    /// Clock Wizard IP
+    logic CLK100M;
+    logic CLK65M;
     clk_wiz_0 clk_vga(
-        .clk_out1(CLK65MHZ),     // output clk_out1
-        .reset(rst_press), // input reset
-        .clk_in1(CLK100MHZ)// input clk_in1
-    );      
- 
-
-    PB_Debouncer #(.DELAY(3_940_000))   //Delay in terms of clock cycles
-    instance_name(
-        .clk(CLK65MHZ),                     //Input clock
-        .rst(1'b0),                     //Input reset signal, active high
-        .PB(~CPU_RESETN),                      //Input pushbutton to be debounced
-        .PB_pressed_status(),       //Output pushbutton status (while pressed)
-        .PB_pressed_pulse(rst_press),        //Output pushbutton pressed pulse (when just pressed)
-        .PB_released_pulse()        //Output pushbutton status (when just released)
+        .clk_out1(CLK65M),  // output clk_out1
+        .clk_out2(CLK100M), // output clk_out2
+        .reset(rst_press),  // input reset
+        .clk_in1(CLK100MHZ) // input clk_in1
+    );    
+    
+    /// Reset pushbutton debouncer
+    PB_Debouncer #(.DELAY(5_000_000))       //Delay in terms of clock cycles
+    rst_debouncer(
+        .clk(CLK100M),                    //Input clock
+        .rst(1'b0),                         //Input reset signal, active high
+        .PB(~CPU_RESETN),                   //Input pushbutton to be debounced
+        .PB_pressed_status(),               //Output pushbutton status (while pressed)
+        .PB_pressed_pulse(rst_press),       //Output pushbutton pressed pulse (when just pressed)
+        .PB_released_pulse()                //Output pushbutton status (when just released)
     );
 
-    // logic clk;
+    //UART logic
+    logic [7:0] byte_received;
+    logic rx_data_ready;
+    rx_uart #(
+		.CLK_FREQUENCY(100_208_000),   //Input Clock Frequency
+		.BAUD_RATE(115200)		        //Serial Baud Rate
+	) 
+	instance_name(
+		.clk(CLK100M),				    //Input clock
+		.reset(rst_press),			    //Input reset signal, active high
+		.rx(UART_TXD_IN),				//Input data signal
+		.rx_data(byte_received[7:0]),	//Output data byte
+		.rx_ready(rx_data_ready)	    //Output data ready signal
+	);
+
+    //Blok RAM logic
+    logic ena;
+    logic wea;
+    logic [17:0] addra;
+    logic [23:0] dina;
+    logic enb;
+    logic [17:0] addrb;
+    logic [23:0] doutb;
+    blk_mem_gen_0 BRAM(
+        .clka(CLK100M),         // input wire clka
+        .ena(ena),              // input wire ena
+        .wea(wea),              // input wire [0 : 0] wea
+        .addra(addra[17:0]),    // input wire [17 : 0] addra
+        .dina(dina[23:0]),      // input wire [23 : 0] dina
+        .clkb(CLK65M),          // input wire clkb
+        .enb(enb),              // input wire enb
+        .addrb(addrb[17:0]),    // input wire [17 : 0] addrb
+        .doutb(doutb[23:0])     // output wire [23 : 0] doutb
+    );
+
+    write_controller write_bram(
+        .clk(CLK100M),
+        .rst(rst_press),
+        .byte_received(byte_received[7:0]),
+        .rx_data_ready(rx_data_ready),
+        .en(ena),
+        .we(wea),
+        .addr(addra[17:0]),
+        .din(dina[23:0]),
+        .status(),
+        .status_next(),
+        .array(),
+        .byte_counter()
+    );
+
+    /// VGA logic
     logic [10:0] hc_visible,vc_visible;
-    // logic [17:0]address;
-    // logic [23:0]data;
-    // logic load_bram;
-    // logic [17:0]linea;
-    // logic [7:0]serial_data;
-    // logic serial_ready;
-    // logic [23:0]bram_out;                      //salida desde BRAM
-    // logic [11:0] VGA_COLOR;
-    // logic rst;
-    // logic rst_db;
-    // assign rst=~CPU_RESETN;
-    // logic [23:0]vga_aux;
-    
-    //----------------------------------------------------------------------------------------------------------
-    
-    // debouncer DB(.clk(CLK100MHZ),.rst(0),.PB(rst),.PB_pressed_pulse(rst_db));
-    
-    // blk_mem_gen_0 memory(
-    // .clka(CLK100MHZ),
-    // .clkb(clk),
-    // .dina(data),
-    // .ena(1),
-    // .wea(load_bram),
-    // .addra(linea),
-    // .doutb(bram_out),
-    // .addrb(address),
-    // .enb(1));
-    
-    // clk_wiz_0 clk_display(.clk_in1(CLK100MHZ),.clk_out1(clk),.reset(0));
-    
-    // uart_basic uart_basic(.clk(CLK100MHZ),
-    //       //              .reset(rst_db),
-    //                     .rx(UART_TXD_IN),.rx_data(serial_data),
-    //                     .rx_ready(serial_ready));
-    // uart_reciver uart(.clk(CLK100MHZ),
-    //     //              .rst(rst_db),
-    //                   .rx_ready(serial_ready),
-    //                   .rx_data(serial_data),.dato(data),
-    //                   .load(load_bram),.line(linea));
-    
+    logic VGA_HS_next;
+    logic VGA_VS_next;
     driver_vga_1024x768 driver(
-                .clk_vga(CLK65MHZ),.hs(VGA_HS),.vs(VGA_VS),.hc_visible(hc_visible),
+                .clk_vga(CLK65M),.hs(VGA_HS_next),.vs(VGA_VS_next),.hc_visible(hc_visible),
                 .vc_visible(vc_visible)); 
-//     coor_to_address coor_to_address1(.a(hc_visible), .b(vc_visible), .out(address));
-    
-//     //---------------------------------------------------------------------------------------------------------
-    
-//     logic [23:0]dith_out;
-//     logic [23:0]gray_out;
-//     logic [23:0]scramble_out;           //salidas de los filtros a MUXs
-//     logic [23:0]sobel_out;
-    
-//     logic [23:0]mux_0;
-//     logic [23:0]mux_1;
-//     logic [23:0]mux_2;
-//     logic [23:0]mux_3;
-    
-//     /*********************************ARREGLO DE LOS FILTROS EN LOS MUX************************************/
-    
-//     always_comb begin
-    
-//         case (SW[0])
-//             0:  mux_0=bram_out;
-//             1:  mux_0=dith_out;
-//             default:    mux_0=bram_out;
-//         endcase
-    
-//         case (SW[1])
-//             0:  mux_1=mux_0;
-//             1:  mux_1=gray_out;
-//             default:    mux_1=mux_0;
-//         endcase
-    
-//         case (SW[2])
-//             0:  mux_2=mux_1;
-//             1:  mux_2=scramble_out;
-//             default:    mux_2=mux_1;
-//         endcase
-    
-//         case (SW[3])
-//             0:  mux_3=mux_2;
-//             1:  mux_3=sobel_out;            //MUX 3 ES LA SALIDA QUE DEBE PASAR A CL -> VGA_COLOR
-//             default:    mux_3=mux_2;
-//         endcase    
-//         end
-        
-//     /************************************AQUÍ VAN LOS FILTROS************************************/
-    
-//     dithering ditherino(.pixel_in(bram_out),.dithering(dith_out));
-//     grayscale bnw(.pixel_in(mux_0),.gray(gray_out));
-//     color_scramble scramble(.pixel_in(mux_1),.sw(SW[15:10]),.scramble(scramble_out));
-//    sobel_full (.pixel_in(mux_2),.clock(clk), .reset(0),.pixel_out(sobel_out), .hc_visible(hc_visible), .vc_visible(vc_visible));
-//     /********************************************************************************************/
-    logic [11:0] VGA_COLOR;
-    always_comb begin                                   //pasa los bits a VGA_COLOR     (CL en diagrama)
-        if ((hc_visible!='d0)&&(vc_visible!='d0))
-             VGA_COLOR[11:0] = SW[11:0];
+
+
+    //Screen drawing logic
+    always_comb begin
+        if ((vc_visible == 'd0)|| (hc_visible == 'd0))
+            enb = 0;
         else
-             VGA_COLOR[11:0] = 12'h000; //pink
+            enb = 1;
+            addrb[17:0] = (((hc_visible-1)/2) + 'd512*((vc_visible-1)/2));
     end
+  
     
-    always_ff @(posedge CLK65MHZ)
-        if (rst_press)
-            {VGA_R,VGA_G,VGA_B} <= 12'd0;
+    
+    logic [11:0] VGA_COLOR = 12'd0;
+    
+    always_comb begin
+        if ((vc_visible == 'd0)|| (hc_visible == 'd0))
+            VGA_COLOR[11:0] = 12'h000;
         else
-            {VGA_R,VGA_G,VGA_B} <= VGA_COLOR[11:0];
-        
+            VGA_COLOR[11:0] = {doutb[23:20],doutb[15:12],doutb[7:4]};
+            
+    end
 
 
-    // assign {VGA_R,VGA_G,VGA_B} = VGA_COLOR;
+    always_ff @(posedge CLK65M) begin
+            {VGA_R[3:0],VGA_G[3:0],VGA_B[3:0]} <= VGA_COLOR[11:0];
+            VGA_HS <= VGA_HS_next;
+            VGA_VS <= VGA_VS_next;
+    end
+    // logic [11:0] r_VGA_R;
+    // logic [11:0] r_VGA_G;
+    // logic [11:0] r_VGA_B;
+    // logic [2:0] r_VGA_HS;
+    // logic [2:0] r_VGA_VS;
+    // always_ff @(posedge CLK65M) begin
+    //         {r_VGA_R[11:0],r_VGA_G[11:0],r_VGA_B[11:0]} <= {r_VGA_R[11:4],VGA_COLOR[11:8],r_VGA_G[11:4],VGA_COLOR[7:4],r_VGA_B[11:4],VGA_COLOR[3:0]};
+    //         r_VGA_HS[2:0] <= {r_VGA_HS[1:0],VGA_HS_next};
+    //         r_VGA_VS[2:0] <= {r_VGA_VS[1:0],VGA_VS_next};
+    // end
+
+    // assign {VGA_R,VGA_G,VGA_B} = {r_VGA_R[11:8],r_VGA_G[11:8],r_VGA_B[11:8]};
+    // assign VGA_HS = r_VGA_HS[2];
+    // assign VGA_VS = r_VGA_VS[2];
     
 endmodule

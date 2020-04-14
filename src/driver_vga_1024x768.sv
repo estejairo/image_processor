@@ -35,8 +35,8 @@ module driver_vga_1024x768(
         
         logic [10:0] hc, hc_next, vc, vc_next;             // --These are the Horizontal and Vertical counters    
         
-        assign hc_visible = ((hc < (hpixels - hfp)) && (hc > (hsc + hbp)))?(hc -(hsc + hbp)):10'd0;
-        assign vc_visible = ((vc < (vlines - vfp)) && (vc > (vsc + vbp)))?(vc - (vsc + vbp)):10'd0;
+        assign hc_visible = ((hc < (hpixels - hfp+1)) && (hc > (hsc + hbp)))?(hc -(hsc + hbp)):10'd0;
+        assign vc_visible = ((vc < (vlines - vfp+1)) && (vc > (vsc + vbp)))?(vc - (vsc + vbp)):10'd0;
         
         
         // --Runs the horizontal counter
