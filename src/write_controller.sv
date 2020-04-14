@@ -86,7 +86,7 @@ module write_controller(
                         we = 1'b1;
                         addr_reset = 1'd0;
                         state_next[2:0] = WAIT;
-                        if (addr[17:0]==18'd196_608) begin
+                        if (addr[17:0]==18'd196_607) begin
                             state_next = IDLE;
                             addr_reset = 1'b1;
                         end

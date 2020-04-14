@@ -18,7 +18,7 @@ module top(
     input logic UART_TXD_IN,                    //UART data input
     input logic CLK100MHZ,                      //System clock
     input logic CPU_RESETN,                     //Hardware reset   
-    input logic [11:0] SW,                      //Switches
+    input logic [15:0] SW,                      //Switches
     output logic [3:0] VGA_R,VGA_G,VGA_B,       //VGA Colors
     output logic VGA_HS,VGA_VS                  //VGA sync signals
     
@@ -38,12 +38,22 @@ module top(
     
     /// Reset pushbutton debouncer
     PB_Debouncer #(.DELAY(5_000_000))       //Delay in terms of clock cycles
-    rst_debouncer(
+    rst_debouncer_uart_bram(
         .clk(CLK100M),                    //Input clock
         .rst(1'b0),                         //Input reset signal, active high
         .PB(~CPU_RESETN),                   //Input pushbutton to be debounced
         .PB_pressed_status(),               //Output pushbutton status (while pressed)
         .PB_pressed_pulse(rst_press),       //Output pushbutton pressed pulse (when just pressed)
+        .PB_released_pulse()                //Output pushbutton status (when just released)
+    );
+
+    PB_Debouncer #(.DELAY(3_250_000))       //Delay in terms of clock cycles
+    rst_debouncer_vga(
+        .clk(CLK65M),                    //Input clock
+        .rst(1'b0),                         //Input reset signal, active high
+        .PB(~CPU_RESETN),                   //Input pushbutton to be debounced
+        .PB_pressed_status(),               //Output pushbutton status (while pressed)
+        .PB_pressed_pulse(rst_vga_press),       //Output pushbutton pressed pulse (when just pressed)
         .PB_released_pulse()                //Output pushbutton status (when just released)
     );
 
@@ -98,54 +108,133 @@ module top(
     );
 
     /// VGA logic
-    logic [10:0] hc_visible,vc_visible;
-    logic VGA_HS_next;
-    logic VGA_VS_next;
+    logic [10:0] hc_visible_1,vc_visible_1;
+    logic VGA_HS_1;
+    logic VGA_VS_1;
     driver_vga_1024x768 driver(
-                .clk_vga(CLK65M),.hs(VGA_HS_next),.vs(VGA_VS_next),.hc_visible(hc_visible),
-                .vc_visible(vc_visible)); 
+                .clk_vga(CLK65M),.hs(VGA_HS_1),.vs(VGA_VS_1),.hc_visible(hc_visible_1),
+                .vc_visible(vc_visible_1)); 
 
 
-    //Screen drawing logic
+    //BRAM Read logic
     always_comb begin
-        if ((vc_visible == 'd0)|| (hc_visible == 'd0))
+        if ((vc_visible_1 == 'd0)|| (hc_visible_1 == 'd0))
             enb = 0;
         else
             enb = 1;
-            addrb[17:0] = (((hc_visible-1)/2) + 'd512*((vc_visible-1)/2));
+            addrb[17:0] = (((hc_visible_1-1)/2) + 'd512*((vc_visible_1-1)/2));
     end
-  
+
+    //Synchronization between colors and sync signals
+    logic VGA_HS_4,VGA_HS_3,VGA_HS_2 = 'd0;
+    logic VGA_VS_4,VGA_VS_3,VGA_VS_2 = 'd0;
+    logic [10:0] hc_visible_4, hc_visible_3,hc_visible_2 = 'd0;
+    logic [10:0] vc_visible_4, vc_visible_3,vc_visible_2 = 'd0;
+    logic [23:0] color4 = 'd0;
     
-    
-    logic [11:0] VGA_COLOR = 12'd0;
-    
+    always_ff @(posedge CLK65M) begin
+        if (rst_vga_press) begin 
+            {hc_visible_4,hc_visible_3,hc_visible_2}<= 'd0;
+            {vc_visible_4,vc_visible_3,vc_visible_2}<= 'd0;
+            {VGA_HS_4,VGA_HS_3,VGA_HS_2}            <= 'd0;
+            {VGA_VS_4,VGA_VS_3,VGA_VS_2}            <= 'd0;
+            color4[23:0]                            <= 'd0;
+        end
+        else begin
+            {hc_visible_4,hc_visible_3,hc_visible_2}<= {hc_visible_3,hc_visible_2,hc_visible_1};
+            {vc_visible_4,vc_visible_3,vc_visible_2}<= {vc_visible_3,vc_visible_2,vc_visible_1};
+            {VGA_HS_4,VGA_HS_3,VGA_HS_2}            <= {VGA_HS_3,VGA_HS_2,VGA_HS_1};
+            {VGA_VS_4,VGA_VS_3,VGA_VS_2}            <= {VGA_VS_3,VGA_VS_2,VGA_VS_1};
+            color4[23:0]                            <= doutb[23:0];
+        end
+    end
+
+    // Gray Scale
+    logic [7:0] gray;
+    logic [23:0] gray_scale;
     always_comb begin
-        if ((vc_visible == 'd0)|| (hc_visible == 'd0))
+        gray[7:0] = (color4[23:16]+color4[15:8]+color4[7:0])/'d3;
+        if (SW[1])
+            gray_scale[23:0] = {gray[7:0],gray[7:0] ,gray[7:0]};
+        else
+            gray_scale[23:0] = color4[23:0];
+    end
+    
+    logic VGA_HS_5 = 'd0;
+    logic VGA_VS_5 = 'd0;
+    logic [10:0] hc_visible_5 = 'd0;
+    logic [10:0] vc_visible_5 = 'd0;
+    logic [23:0] color5 = 'd0;
+
+    always_ff @(posedge CLK65M) begin
+        if (rst_vga_press) begin 
+            hc_visible_5 <= 'd0;
+            vc_visible_5 <= 'd0;
+            VGA_HS_5     <= 'd0;
+            VGA_VS_5     <= 'd0;
+            color5[23:0] <= 'd0;
+        end
+        else begin
+            hc_visible_5 <= hc_visible_4;
+            vc_visible_5 <= vc_visible_4;
+            VGA_HS_5     <= VGA_HS_4;
+            VGA_VS_5     <= VGA_VS_4;
+            color5[23:0] <= gray_scale[23:0];
+        end
+    end
+
+    //Color Scrambler
+    logic [23:0] scramble;
+    color_scramble scramble_inst(
+        .pixel_in(color5[23:0]),
+        .sw(SW[15:10]),
+        .scramble(scramble[23:0])
+    );
+
+    logic VGA_HS_6 = 'd0;
+    logic VGA_VS_6 = 'd0;
+    logic [10:0] hc_visible_6 = 'd0;
+    logic [10:0] vc_visible_6 = 'd0;
+    logic [23:0] color6 = 'd0;
+
+    always_ff @(posedge CLK65M) begin
+        if (rst_vga_press) begin 
+            hc_visible_6 <= 'd0;
+            vc_visible_6 <= 'd0;
+            VGA_HS_6     <= 'd0;
+            VGA_VS_6     <= 'd0;
+            color6[23:0] <= 'd0;
+        end
+        else begin
+            hc_visible_6 <= hc_visible_5;
+            vc_visible_6 <= vc_visible_5;
+            VGA_HS_6     <= VGA_HS_5;
+            VGA_VS_6     <= VGA_VS_5;
+            color6[23:0] <= scramble[23:0];
+        end
+    end
+    
+    //Screen drawing
+    logic [11:0] VGA_COLOR = 12'd0;
+    always_comb begin
+        if ((vc_visible_6 == 'd0)|| (hc_visible_6 == 'd0))
             VGA_COLOR[11:0] = 12'h000;
         else
-            VGA_COLOR[11:0] = {doutb[23:20],doutb[15:12],doutb[7:4]};
+            VGA_COLOR[11:0] = {color6[23:20],color6[15:12],color6[7:4]};
             
     end
 
-
     always_ff @(posedge CLK65M) begin
+        if (rst_vga_press) begin
+            {VGA_R[3:0],VGA_G[3:0],VGA_B[3:0]} <= 'd0;
+            VGA_HS <= 'd0;
+            VGA_VS <= 'd0;
+        end
+        else begin
             {VGA_R[3:0],VGA_G[3:0],VGA_B[3:0]} <= VGA_COLOR[11:0];
-            VGA_HS <= VGA_HS_next;
-            VGA_VS <= VGA_VS_next;
+            VGA_HS <= VGA_HS_6;
+            VGA_VS <= VGA_VS_6;
+        end
     end
-    // logic [11:0] r_VGA_R;
-    // logic [11:0] r_VGA_G;
-    // logic [11:0] r_VGA_B;
-    // logic [2:0] r_VGA_HS;
-    // logic [2:0] r_VGA_VS;
-    // always_ff @(posedge CLK65M) begin
-    //         {r_VGA_R[11:0],r_VGA_G[11:0],r_VGA_B[11:0]} <= {r_VGA_R[11:4],VGA_COLOR[11:8],r_VGA_G[11:4],VGA_COLOR[7:4],r_VGA_B[11:4],VGA_COLOR[3:0]};
-    //         r_VGA_HS[2:0] <= {r_VGA_HS[1:0],VGA_HS_next};
-    //         r_VGA_VS[2:0] <= {r_VGA_VS[1:0],VGA_VS_next};
-    // end
-
-    // assign {VGA_R,VGA_G,VGA_B} = {r_VGA_R[11:8],r_VGA_G[11:8],r_VGA_B[11:8]};
-    // assign VGA_HS = r_VGA_HS[2];
-    // assign VGA_VS = r_VGA_VS[2];
     
 endmodule
