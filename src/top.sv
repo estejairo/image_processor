@@ -112,7 +112,7 @@ module top(
     logic VGA_HS_1;
     logic VGA_VS_1;
     driver_vga_1024x768 driver(
-                .clk_vga(CLK65M),.hs(VGA_HS_1),.vs(VGA_VS_1),.hc_visible(hc_visible_1),
+                .clk_vga(CLK65M),.rst(rst_vga_press),.hs(VGA_HS_1),.vs(VGA_VS_1),.hc_visible(hc_visible_1),
                 .vc_visible(vc_visible_1)); 
 
 
@@ -149,17 +149,14 @@ module top(
         end
     end
 
-    // Gray Scale
-    logic [7:0] gray;
-    logic [23:0] gray_scale;
-    always_comb begin
-        gray[7:0] = (color4[23:16]+color4[15:8]+color4[7:0])/'d3;
-        if (SW[1])
-            gray_scale[23:0] = {gray[7:0],gray[7:0] ,gray[7:0]};
-        else
-            gray_scale[23:0] = color4[23:0];
-    end
-    
+
+    //Dithering
+    logic [23:0] dithering;
+    dithering dithering_inst(
+        .pixel_in(color4[23:0]),
+        .dithering(dithering[23:0])
+    );
+
     logic VGA_HS_5 = 'd0;
     logic VGA_VS_5 = 'd0;
     logic [10:0] hc_visible_5 = 'd0;
@@ -179,18 +176,21 @@ module top(
             vc_visible_5 <= vc_visible_4;
             VGA_HS_5     <= VGA_HS_4;
             VGA_VS_5     <= VGA_VS_4;
-            color5[23:0] <= gray_scale[23:0];
+            color5[23:0] <= (SW[0])?dithering[23:0]:color4[23:0];
         end
     end
 
-    //Color Scrambler
-    logic [23:0] scramble;
-    color_scramble scramble_inst(
-        .pixel_in(color5[23:0]),
-        .sw(SW[15:10]),
-        .scramble(scramble[23:0])
-    );
-
+    // Gray Scale
+    logic [7:0] gray;
+    logic [23:0] gray_scale;
+    always_comb begin
+        gray[7:0] = (color5[23:16]+color5[15:8]+color5[7:0])/'d3;
+        if (SW[1])
+            gray_scale[23:0] = {gray[7:0],gray[7:0] ,gray[7:0]};
+        else
+            gray_scale[23:0] = color5[23:0];
+    end
+    
     logic VGA_HS_6 = 'd0;
     logic VGA_VS_6 = 'd0;
     logic [10:0] hc_visible_6 = 'd0;
@@ -210,17 +210,48 @@ module top(
             vc_visible_6 <= vc_visible_5;
             VGA_HS_6     <= VGA_HS_5;
             VGA_VS_6     <= VGA_VS_5;
-            color6[23:0] <= scramble[23:0];
+            color6[23:0] <= gray_scale[23:0];
+        end
+    end
+
+    //Color Scrambler
+    logic [23:0] scramble;
+    color_scramble scramble_inst(
+        .pixel_in(color6[23:0]),
+        .sw(SW[15:10]),
+        .scramble(scramble[23:0])
+    );
+
+    logic VGA_HS_7 = 'd0;
+    logic VGA_VS_7 = 'd0;
+    logic [10:0] hc_visible_7 = 'd0;
+    logic [10:0] vc_visible_7 = 'd0;
+    logic [23:0] color7 = 'd0;
+
+    always_ff @(posedge CLK65M) begin
+        if (rst_vga_press) begin 
+            hc_visible_7 <= 'd0;
+            vc_visible_7 <= 'd0;
+            VGA_HS_7     <= 'd0;
+            VGA_VS_7     <= 'd0;
+            color7[23:0] <= 'd0;
+        end
+        else begin
+            hc_visible_7 <= hc_visible_6;
+            vc_visible_7 <= vc_visible_6;
+            VGA_HS_7     <= VGA_HS_6;
+            VGA_VS_7     <= VGA_VS_6;
+            color7[23:0] <= scramble[23:0];
         end
     end
     
     //Screen drawing
     logic [11:0] VGA_COLOR = 12'd0;
     always_comb begin
-        if ((vc_visible_6 == 'd0)|| (hc_visible_6 == 'd0))
+        if ((vc_visible_7 == 'd0)|| (hc_visible_7 == 'd0))
             VGA_COLOR[11:0] = 12'h000;
         else
-            VGA_COLOR[11:0] = {color6[23:20],color6[15:12],color6[7:4]};
+            VGA_COLOR[11:0] = {color7[23:20],color7[15:12],color7[7:4]};
             
     end
 
@@ -232,8 +263,8 @@ module top(
         end
         else begin
             {VGA_R[3:0],VGA_G[3:0],VGA_B[3:0]} <= VGA_COLOR[11:0];
-            VGA_HS <= VGA_HS_6;
-            VGA_VS <= VGA_VS_6;
+            VGA_HS <= VGA_HS_7;
+            VGA_VS <= VGA_VS_7;
         end
     end
     

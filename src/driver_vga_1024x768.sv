@@ -13,7 +13,8 @@
 //http://tinyvga.com/vga-timing/800x600@72Hz
 
 module driver_vga_1024x768(
-		input clk_vga,                     
+		input clk_vga,
+        input rst,                    
 		output hs, vs,
 		output [10:0]hc_visible,
         output [10:0]vc_visible
@@ -59,6 +60,9 @@ module driver_vga_1024x768(
                 vc_next = vc;
         
         always_ff@(posedge clk_vga)
+            if (rst)
+                {hc, vc} <= 'd0;
+            else
                 {hc, vc} <= {hc_next, vc_next};
             
         assign hs = (hc < hsc) ? 1'b0 : 1'b1;   // --Horizontal Sync Pulse

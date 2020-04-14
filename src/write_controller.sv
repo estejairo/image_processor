@@ -66,6 +66,7 @@ module write_controller(
                         if (rx_data_ready_r) begin
                             state_next[2:0] = WAIT;
                             addr_reset = 1'd0;
+                            byte_counter_next = byte_counter + 1'd1;
                         end
                     end
             WAIT:   begin

@@ -31,7 +31,7 @@ module write_controller_tb();
     always begin
         #1
         #20
-        for (i=0; i<199692; i=i+1) begin
+        for (i=0; i<(199692*3); i=i+1) begin
             #10     byte_received[7:0] = byte_received[7:0] + 1'd1;
                     rx_data_ready = 1'd1;
             #2      rx_data_ready = 1'd0;
