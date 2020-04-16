@@ -1,67 +1,65 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 06.09.2019 10:58:50
-// Design Name: 
-// Module Name: dithering
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
-
-// dithering nombre_(.pixel_in(24 bits),.dithering(24 bits));
 
 module dithering(
-    input logic [23:0]pixel_in,
-    output logic [23:0]dithering
+    input logic [23:0] pixel_in,
+    input logic [10:0] hc_visible,
+    input logic [10:0] vc_visible,
+    output logic [11:0] dithering
     );
-    logic [7:0]r_channel;
-    logic [7:0]g_channel;
-    logic [7:0]b_channel;
-    
-    logic [7:0]r_dither;
-    logic [7:0]g_dither;
-    logic [7:0]b_dither;
-    
-    assign r_channel = pixel_in[23:16];
-    assign g_channel = pixel_in[15:8];
-    assign b_channel = pixel_in[7:0];
-    
+    logic [10:0] x = (hc_visible[10:0])%4;
+    logic [10:0] y = (vc_visible[10:0])%4; 
+    logic [3:0] r;
+    logic [3:0] g;
+    logic [3:0] b;
+    logic [31:0] matrix_value;
     always_comb begin
-        if (r_channel[3])begin
-            if(r_channel[7:4]=='hF)
-                r_dither = r_channel[7:0];
-            else 
-                r_dither = {r_channel[7:4]+1'b1, 4'b0};
-            end
-        else r_dither = {r_channel[7:4], 4'b0};
-        
-        if (g_channel[3])begin
-            if(g_channel[7:4]=='hF)
-                g_dither = g_channel[7:0];
-            else 
-                g_dither = {g_channel[7:4]+1'b1, 4'b0};
-            end
-        else g_dither = {g_channel[7:4], 4'b0};
-        
-        if (b_channel[3])begin
-            if(b_channel[7:4]=='hF)
-                b_dither = b_channel[7:0];
-            else 
-                b_dither = {b_channel[7:4]+1'b1, 4'b0};
-            end
-        else b_dither = {b_channel[7:4], 4'b0};
+        // case({x,y})
+        //     {11'd0,11'd0}: matrix_value = -'d2;
+        //     {11'd0,11'd1}: matrix_value = 'd0;
+        //     {11'd0,11'd2}: matrix_value = -'d2;
+        //     {11'd0,11'd3}: matrix_value = 'd0;
+        //     {11'd1,11'd0}: matrix_value = 'd0;
+        //     {11'd1,11'd1}: matrix_value = -'d1;
+        //     {11'd1,11'd2}: matrix_value = 'd1;
+        //     {11'd1,11'd3}: matrix_value = -'d1;
+        //     {11'd2,11'd0}: matrix_value = -'d2;
+        //     {11'd2,11'd1}: matrix_value = 'd0;
+        //     {11'd2,11'd2}: matrix_value = -'d2;
+        //     {11'd2,11'd3}: matrix_value = 'd0;
+        //     {11'd3,11'd0}: matrix_value = 'd1;
+        //     {11'd3,11'd1}: matrix_value = -'d1;
+        //     {11'd3,11'd2}: matrix_value = 'd1;
+        //     {11'd3,11'd3}: matrix_value = -'d1;
+        //     default: matrix_value = 'd0;
+        // endcase
+
+        // r[3:0] = pixel_in[23:16]/'d17 + matrix_value;
+        // g[3:0] = pixel_in[15:8]/'d17 + matrix_value;
+        // b[3:0] = pixel_in[7:0]/'d17 + matrix_value;
+        case({x,y})
+            {11'd0,11'd0}: matrix_value = 'd0;
+            {11'd0,11'd1}: matrix_value = 'd32;
+            {11'd0,11'd2}: matrix_value = 'd8;
+            {11'd0,11'd3}: matrix_value = 'd40;
+            {11'd1,11'd0}: matrix_value = 'd48;
+            {11'd1,11'd1}: matrix_value = 'd16;
+            {11'd1,11'd2}: matrix_value = 'd56;
+            {11'd1,11'd3}: matrix_value = 'd24;
+            {11'd2,11'd0}: matrix_value = 'd12;
+            {11'd2,11'd1}: matrix_value = 'd44;
+            {11'd2,11'd2}: matrix_value = 'd4;
+            {11'd2,11'd3}: matrix_value = 'd36;
+            {11'd3,11'd0}: matrix_value = 'd60;
+            {11'd3,11'd1}: matrix_value = 'd28;
+            {11'd3,11'd2}: matrix_value = 'd52;
+            {11'd3,11'd3}: matrix_value = 'd20;
+            default: matrix_value = 'd0;
+        endcase
+
+        r[3:0] = (pixel_in[23:16]>'d195)?'d15:(pixel_in[23:16] + matrix_value)/17;
+        g[3:0] = (pixel_in[15:8]>'d195)?'d15:(pixel_in[15:8] + matrix_value)/17;
+        b[3:0] = (pixel_in[7:0]>'d195)?'d15:(pixel_in[7:0] + matrix_value)/17;
     end
-    
-    assign dithering = {r_dither,g_dither,b_dither};
+    assign dithering[11:0] = {r[3:0],g[3:0],b[3:0]};
+
 endmodule

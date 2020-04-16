@@ -30,13 +30,19 @@ module write_controller(
     // Last 3 data bytes concatenation
     logic [23:0] data_array = 24'd0;
     assign array[23:0] = data_array[23:0];
+    logic array_ready = 1'd0;
 
     always_ff @(posedge clk) begin
-        if (rst)
+        if (rst) begin
             data_array[23:0] <= 24'd0;
+            array_ready <= 'd0;
+        end
         else
-            if (rx_data_ready_r)
+            array_ready <= 1'd0;
+            if (rx_data_ready_r) begin
                 data_array[23:0] <= {data_array[15:0],byte_received[7:0]};
+                array_ready <= 1'd1;
+            end
     end
     
 
@@ -63,7 +69,7 @@ module write_controller(
         byte_counter_next = byte_counter;
         case(state)
             IDLE:   begin
-                        if (rx_data_ready_r) begin
+                        if (array_ready) begin
                             state_next[2:0] = WAIT;
                             addr_reset = 1'd0;
                             byte_counter_next = byte_counter + 1'd1;
@@ -72,7 +78,7 @@ module write_controller(
             WAIT:   begin
                         state_next[2:0] = WAIT;
                         addr_reset = 1'd0;
-                        if (rx_data_ready_r)
+                        if (array_ready)
                             if (byte_counter=='d2) begin
                                 state_next[2:0] = WRITE;
                                 addr_reset = 1'd0;
